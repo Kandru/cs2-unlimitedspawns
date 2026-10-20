@@ -10,7 +10,7 @@ namespace UnlimitedSpawns
     {
         private readonly List<GhostEntry> _ghosts = new();
         private int _ghostCursor;
-        private bool _roundFrozen;
+        private bool _ghostChecksEnabled;
         private float _separationDistanceSquared = 100f * 100f;
 
         private struct GhostEntry
@@ -68,7 +68,7 @@ namespace UnlimitedSpawns
         private void OnTick()
         {
             int ghostCount = _ghosts.Count;
-            if (ghostCount == 0 || _roundFrozen)
+            if (ghostCount == 0 || !_ghostChecksEnabled)
             {
                 return;
             }
@@ -112,10 +112,8 @@ namespace UnlimitedSpawns
                     return;
                 }
 
-                float sx = origin.X;
-                float sy = origin.Y;
-
-                if (IsOverlappingAnyLivingPawn(subject, sx, sy, separationSquared))
+                // Only other ghosted pawns matter — solid players already collide normally.
+                if (IsOverlappingAnyGhost(entry.Slot, origin.X, origin.Y, separationSquared))
                 {
                     entry.NextCheckTime = now + interval;
                     _ghosts[index] = entry;
@@ -128,26 +126,20 @@ namespace UnlimitedSpawns
             }
         }
 
-        private static bool IsOverlappingAnyLivingPawn(
-            CCSPlayerPawn subject,
-            float sx,
-            float sy,
-            float separationSquared)
+        /// <summary>
+        /// True while this pawn is still horizontally within separation distance of another ghosted pawn.
+        /// </summary>
+        private bool IsOverlappingAnyGhost(int subjectSlot, float sx, float sy, float separationSquared)
         {
-            foreach (CCSPlayerController player in Utilities.GetPlayers())
+            for (int i = 0; i < _ghosts.Count; i++)
             {
-                if (!player.IsValid || !player.PawnIsAlive)
+                int slot = _ghosts[i].Slot;
+                if (slot == subjectSlot)
                 {
                     continue;
                 }
 
-                CCSPlayerPawn? other = player.PlayerPawn.Value;
-                if (other == null || !other.IsValid || other.Handle == subject.Handle)
-                {
-                    continue;
-                }
-
-                if (other.LifeState != (byte)LifeState_t.LIFE_ALIVE)
+                if (!TryGetAlivePawn(slot, out CCSPlayerPawn? other) || other == null)
                 {
                     continue;
                 }

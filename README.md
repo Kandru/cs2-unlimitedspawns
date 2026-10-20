@@ -6,7 +6,7 @@
 [![issues - cs2-unlimitedspawns](https://img.shields.io/github/issues/Kandru/cs2-unlimitedspawns?color=darkgreen)](https://github.com/Kandru/cs2-unlimitedspawns/issues)
 [![](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/donate/?hosted_button_id=C2AVYKGVP9TRG)
 
-Lets several players share a map spawn without getting stuck inside each other. After spawn they have no player collision until they are far enough apart; then normal collision comes back.
+Fills each team’s spawn entities up to `Server.MaxPlayers / 2` by cloning map spawns evenly, and disables player collision after spawn until players are far enough apart.
 
 > [!TIP]
 > Please consider a [donation](https://www.paypal.com/donate/?hosted_button_id=C2AVYKGVP9TRG) when you're using this plugin - it only costs you a few dollars and would help me very much!
@@ -16,9 +16,10 @@ Lets several players share a map spawn without getting stuck inside each other. 
 
 ## Features
 
+- On map start, disable `sv_hibernate_when_empty`, wait 3 seconds, count T/CT spawns, add only the missing entities (round-robin over map spawns) up to `Server.MaxPlayers / 2` per team, then re-enable hibernation. Plugin reload runs the same check without the delay.
 - On spawn, disable player-to-player collision so stacked players can move apart.
-- After `mp_freezetime` ends (`round_freeze_end`), check one ghosted player per tick against other living pawns.
-- Restore collision once a player is at least `separation_distance` units away from every other living player (default 100).
+- Ghost checks start after `round_freeze_end`, or on `round_start` when `mp_freezetime` is 0; they stop on `round_end` (plugin reload enables checks immediately).
+- Restore collision once a player is at least `separation_distance` units away from every other ghosted player (default 100).
 - Build with Docker (`make debug` / `make release`) - no local .NET install required.
 
 ## Requirements

@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Cvars;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 
 namespace UnlimitedSpawns
@@ -9,33 +10,58 @@ namespace UnlimitedSpawns
     {
         public override string ModuleName => "UnlimitedSpawns";
         public override string ModuleAuthor => "Kalle <kalle@kandru.de>";
-        public override string ModuleDescription => "Disable player collision after spawn until players are clear of each other";
+        public override string ModuleDescription => "Fill map spawns to MaxPlayers/2 per team and disable collision until players are clear";
 
         public override void Load(bool hotReload)
         {
+            RegisterListener<Listeners.OnMapStart>(OnMapStart);
             RegisterListener<Listeners.OnTick>(OnTick);
             RegisterListener<Listeners.OnMapEnd>(OnMapEnd);
+
+            if (hotReload)
+            {
+                // Mid-round reload: freeze already ended (or never applies).
+                _ghostChecksEnabled = true;
+                // Re-count spawns on the live map and only create missing ones.
+                EnsureSpawns();
+            }
         }
 
         public override void Unload(bool hotReload)
         {
+            RemoveListener<Listeners.OnMapStart>(OnMapStart);
             RemoveListener<Listeners.OnTick>(OnTick);
             RemoveListener<Listeners.OnMapEnd>(OnMapEnd);
             ClearGhosts();
+            Server.ExecuteCommand("sv_hibernate_when_empty 1");
+        }
+
+        [GameEventHandler]
+        public HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
+        {
+            _ghostChecksEnabled = false;
+            return HookResult.Continue;
         }
 
         [GameEventHandler]
         public HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
         {
-            _roundFrozen = true;
+            // mp_freezetime 0: round_freeze_end is unreliable — enable checks on round start.
+            _ghostChecksEnabled = GetFreezeTime() <= 0;
             return HookResult.Continue;
         }
 
         [GameEventHandler]
         public HookResult OnRoundFreezeEnd(EventRoundFreezeEnd @event, GameEventInfo info)
         {
-            _roundFrozen = false;
+            _ghostChecksEnabled = true;
             return HookResult.Continue;
+        }
+
+        private static int GetFreezeTime()
+        {
+            ConVar? freezeTime = ConVar.Find("mp_freezetime");
+            return freezeTime?.GetPrimitiveValue<int>() ?? 0;
         }
 
         [GameEventHandler(HookMode.Post)]
@@ -65,8 +91,11 @@ namespace UnlimitedSpawns
 
         private void OnMapEnd()
         {
-            _roundFrozen = false;
+            _ghostChecksEnabled = false;
+            _spawnsFilled = false;
+            _spawnFillAttempts = 0;
             ClearGhosts();
+            Server.ExecuteCommand("sv_hibernate_when_empty 1");
         }
     }
 }
