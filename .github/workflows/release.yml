@@ -1,0 +1,134 @@
+name: Build Release
+
+env:
+  PLUGIN_NAME: UnlimitedSpawns
+  VERSION_FILE: src/UnlimitedSpawns/Version.cs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/UnlimitedSpawns/Version.cs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      new_version: ${{ steps.check.outputs.new_version }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Read Version From Version.cs
+        id: version
+        run: |
+          version=$(grep -oP '(?<=ModuleVersion => ")[^"]*' "$VERSION_FILE")
+          if [ -z "$version" ]; then
+            echo "::error::Could not read ModuleVersion from $VERSION_FILE"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check Whether Release Already Exists
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "new_version=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "new_version=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.new_version == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish Plugin
+        run: |
+          dotnet restore "src/${PLUGIN_NAME}/${PLUGIN_NAME}.csproj"
+          dotnet publish "src/${PLUGIN_NAME}/${PLUGIN_NAME}.csproj" -c Release --no-restore
+
+      - name: Package Release
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          mkdir -p release-artifacts/zip/plugins release-artifacts/zip/gamedata
+          cp -r "src/${PLUGIN_NAME}/bin/Release/net10.0/publish" "release-artifacts/zip/plugins/${PLUGIN_NAME}"
+          cp "src/${PLUGIN_NAME}/gamedata/unlimitedspawns.json" "release-artifacts/zip/gamedata/unlimitedspawns.json"
+          (
+            cd release-artifacts/zip
+            zip -r "../${{ github.event.repository.name }}-release-${VERSION}.zip" plugins gamedata
+          )
+          rm -rf release-artifacts/zip
+
+      - name: Build Release Notes
+        run: |
+          if last_tag=$(git describe --tags --abbrev=0 HEAD 2>/dev/null); then
+            range="$last_tag..HEAD"
+          else
+            range="HEAD"
+          fi
+          git log --pretty=format:"- [%h](https://github.com/${GITHUB_REPOSITORY}/commit/%H) %s (%an)" $range > release-artifacts/release_notes.md
+
+      - name: Upload Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: release-artifacts/
+
+  create-release:
+    needs: [prepare, build]
+    if: needs.prepare.outputs.new_version == 'true'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+
+    steps:
+      - name: Download Release Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifacts
+          path: release-artifacts
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$VERSION" \
+            "release-artifacts/${{ github.event.repository.name }}-release-${VERSION}.zip" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$VERSION" \
+            --notes-file release-artifacts/release_notes.md
+
+      - name: Keep Only The Four Latest Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --limit 100 \
+            --json tagName --jq '.[4:][].tagName' \
+            | while read -r tag; do
+                [ -n "$tag" ] || continue
+                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+              done
