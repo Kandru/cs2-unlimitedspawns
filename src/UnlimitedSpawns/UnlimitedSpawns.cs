@@ -18,13 +18,14 @@ namespace UnlimitedSpawns
             RegisterListener<Listeners.OnTick>(OnTick);
             RegisterListener<Listeners.OnMapEnd>(OnMapEnd);
 
-            if (hotReload)
+            if (!hotReload)
             {
-                // Mid-round reload: freeze already ended (or never applies).
-                _ghostChecksEnabled = true;
-                // Re-count spawns on the live map and only create missing ones.
-                EnsureSpawns();
+                return;
             }
+
+            // Mid-round reload: freeze already ended (or never applies).
+            _ghostChecksEnabled = true;
+            EnsureSpawns();
         }
 
         public override void Unload(bool hotReload)
@@ -33,13 +34,15 @@ namespace UnlimitedSpawns
             RemoveListener<Listeners.OnTick>(OnTick);
             RemoveListener<Listeners.OnMapEnd>(OnMapEnd);
             ClearGhosts();
-            Server.ExecuteCommand("sv_hibernate_when_empty 1");
+            ClearCustomSpawns();
+            RestoreHibernate();
         }
 
         [GameEventHandler]
         public HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
         {
             _ghostChecksEnabled = false;
+            Server.NextFrame(FollowMovedParentSpawns);
             return HookResult.Continue;
         }
 
@@ -48,6 +51,12 @@ namespace UnlimitedSpawns
         {
             // mp_freezetime 0: round_freeze_end is unreliable — enable checks on round start.
             _ghostChecksEnabled = GetFreezeTime() <= 0;
+            if (_ghostChecksEnabled)
+            {
+                Server.NextFrame(ProcessGhosts);
+            }
+
+            UpdateSpawnQuota();
             return HookResult.Continue;
         }
 
@@ -55,6 +64,7 @@ namespace UnlimitedSpawns
         public HookResult OnRoundFreezeEnd(EventRoundFreezeEnd @event, GameEventInfo info)
         {
             _ghostChecksEnabled = true;
+            Server.NextFrame(ProcessGhosts);
             return HookResult.Continue;
         }
 
@@ -74,7 +84,6 @@ namespace UnlimitedSpawns
             }
 
             int slot = player.Slot;
-
             Server.NextFrame(() =>
             {
                 if (!TryGetAlivePawn(slot, out CCSPlayerPawn? pawn) || pawn == null)
@@ -89,13 +98,28 @@ namespace UnlimitedSpawns
             return HookResult.Continue;
         }
 
+        [GameEventHandler(HookMode.Post)]
+        public HookResult OnPlayerTeam(EventPlayerTeam @event, GameEventInfo info)
+        {
+            Server.NextFrame(UpdateSpawnQuota);
+            return HookResult.Continue;
+        }
+
+        [GameEventHandler(HookMode.Post)]
+        public HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
+        {
+            Server.NextFrame(UpdateSpawnQuota);
+            return HookResult.Continue;
+        }
+
         private void OnMapEnd()
         {
             _ghostChecksEnabled = false;
             _spawnsFilled = false;
             _spawnFillAttempts = 0;
             ClearGhosts();
-            Server.ExecuteCommand("sv_hibernate_when_empty 1");
+            ClearCustomSpawns();
+            RestoreHibernate();
         }
     }
 }

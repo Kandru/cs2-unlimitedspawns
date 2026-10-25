@@ -17,9 +17,11 @@ Fills each team’s spawn entities up to `Server.MaxPlayers / 2` by cloning map 
 ## Features
 
 - On map start, disable `sv_hibernate_when_empty`, wait 3 seconds, count T/CT spawns, add only the missing entities (round-robin over map spawns) up to `Server.MaxPlayers / 2` per team, then re-enable hibernation. Plugin reload runs the same check without the delay.
+- Custom spawn entities stay disabled until a team needs them: map spawns stay enabled, and customs are enabled so each team has at least `teamPlayers + 1` usable spawn points (clamped when the server is full). Leaving a team disables a custom spawn again. A custom is only eligible while its parent map spawn is enabled.
+- On `round_end`, if a parent map spawn moved (for example Rush relocating `tspawn1` into the next room), custom copies of that parent are moved to match on the next frame.
 - On spawn, disable player-to-player collision so stacked players can move apart.
 - Ghost checks start after `round_freeze_end`, or on `round_start` when `mp_freezetime` is 0; they stop on `round_end` (plugin reload enables checks immediately).
-- Restore collision once a player is at least `separation_distance` units away from every other ghosted player (default 100).
+- Restore collision once a player is at least `separation_distance` units away from every other living player (default 150). Clear players are restored in the same tick.
 - Build with Docker (`make debug` / `make release`) - no local .NET install required.
 
 ## Requirements
@@ -42,8 +44,7 @@ The plugin writes `/addons/counterstrikesharp/configs/plugins/UnlimitedSpawns/Un
 
 | Key | Default | Description |
 |---|---|---|
-| `separation_distance` | `100` | Horizontal distance (units) required from every other living player before collision is restored |
-| `min_check_interval` | `1` | Minimum seconds between distance checks for the same player |
+| `separation_distance` | `150` | Horizontal distance (units) required from every other living player before collision is restored |
 
 ## Compile Yourself
 
