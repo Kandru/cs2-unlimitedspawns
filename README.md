@@ -6,74 +6,43 @@
 [![issues - cs2-unlimitedspawns](https://img.shields.io/github/issues/Kandru/cs2-unlimitedspawns?color=darkgreen)](https://github.com/Kandru/cs2-unlimitedspawns/issues)
 [![](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/donate/?hosted_button_id=C2AVYKGVP9TRG)
 
-Fills each team’s spawn entities up to `Server.MaxPlayers / 2` by cloning map spawns evenly, and disables player collision after spawn until players are far enough apart.
-
 > [!TIP]
-> Please consider a [donation](https://www.paypal.com/donate/?hosted_button_id=C2AVYKGVP9TRG) when you're using this plugin - it only costs you a few dollars and would help me very much!
+> Please consider a [donation](https://www.paypal.com/donate/?hosted_button_id=C2AVYKGVP9TRG) when you're using this plugin - it took a long time to build and improve - it only costs you a few dollars and would help me very much!
 
-> [!IMPORTANT]
-> Create a GitHub Issue for bugs, features, and improvements. Use Discord for everything else.
-
-## Features
-
-- On map start, disable `sv_hibernate_when_empty`, wait 3 seconds, count T/CT spawns, add only the missing entities (round-robin over map spawns) up to `Server.MaxPlayers / 2` per team, then re-enable hibernation. Plugin reload runs the same check without the delay.
-- Custom spawn entities stay disabled until a team needs them: map spawns stay enabled, and customs are enabled so each team has at least `teamPlayers + 1` usable spawn points (clamped when the server is full). Leaving a team disables a custom spawn again. A custom is only eligible while its parent map spawn is enabled.
-- On `round_end`, if a parent map spawn moved (for example Rush relocating `tspawn1` into the next room), custom copies of that parent are moved to match on the next frame.
-- On spawn, disable player-to-player collision so stacked players can move apart.
-- Ghost checks start after `round_freeze_end`, or on `round_start` when `mp_freezetime` is 0; they stop on `round_end` (plugin reload enables checks immediately).
-- Restore collision once a player is at least `separation_distance` units away from every other living player (default 150). Clear players are restored in the same tick.
-- Build with Docker (`make debug` / `make release`) - no local .NET install required.
-
-## Requirements
-
-- [MetaMod:Source](https://github.com/alliedmodders/metamod-source/)
-- [CounterStrikeSharp](https://github.com/roflmuffin/CounterStrikeSharp)
-
-Raise team size / spawnable counts with something like [Max Team Players Override](https://github.com/Kandru/cs2-max-team-players-override) when you want more than the map's usual roster. This plugin only handles collision for players who already share a spawn.
+Extra spawn points in Counter-Strike 2. Maps only come with a few places to spawn and this makes it impossible to play with more players then the mapper originally thought of. This plugin adds more spawn points for both teams and automatically disables collision to avoid getting stuck in one another until they moved away from each other. This plug-in also works with the new Rush game mode where the spawn points do change for each round inside the map.
 
 ## Installation
 
-1. Download and extract the latest release from the [GitHub releases page](https://github.com/Kandru/cs2-unlimitedspawns/releases/).
-2. Move the `UnlimitedSpawns` folder to `addons/counterstrikesharp/plugins/`.
-3. If your CounterStrikeSharp install does not already provide `CBaseEntity_CollisionRulesChanged`, copy `gamedata/unlimitedspawns.json` into `addons/counterstrikesharp/gamedata/`.
-4. Restart the server.
+1. Install [Metamod:Source](https://www.metamodsource.net/downloads.php?branch=dev).
+2. Install [CounterStrikeSharp](https://docs.cssharp.dev/).
+3. Download the latest release from the [GitHub releases page](https://github.com/Kandru/cs2-unlimitedspawns/releases/) and copy the `UnlimitedSpawns` folder into `/game/csgo/addons/counterstrikesharp/plugins/`.
+4. If CounterStrikeSharp does not already provide `CBaseEntity_CollisionRulesChanged`, copy `gamedata/unlimitedspawns.json` into `/game/csgo/addons/counterstrikesharp/gamedata/`.
+5. Restart the server. Config is created at `addons/counterstrikesharp/configs/plugins/UnlimitedSpawns/UnlimitedSpawns.json`.
 
-## Configuration
+To run teams larger than the map was built for, also raise the team size limit, for example with [Max Team Players Override](https://github.com/Kandru/cs2-max-team-players-override).
 
-The plugin writes `/addons/counterstrikesharp/configs/plugins/UnlimitedSpawns/UnlimitedSpawns.json`.
-
-| Key | Default | Description |
-|---|---|---|
-| `separation_distance` | `150` | Horizontal distance (units) required from every other living player before collision is restored |
-
-## Compile Yourself
-
-Clone the project:
+## Build
 
 ```bash
-git clone https://github.com/Kandru/cs2-unlimitedspawns.git
-cd cs2-unlimitedspawns
+make debug      # dockerized dotnet build
+make release    # dockerized dotnet publish
 ```
 
-Build debug files (development game server):
+Uses `mcr.microsoft.com/dotnet/sdk:10.0` — no project Dockerfile.
 
-```bash
-make debug
-```
+## Config
 
-Build release files (production game server):
+`addons/counterstrikesharp/configs/plugins/UnlimitedSpawns/UnlimitedSpawns.json` (generated on first run). Disable the plugin in CounterStrikeSharp if you do not want Unlimited Spawns at all.
 
-```bash
-make release
-```
-
-Docker runs the .NET 10 SDK. No local `dotnet` install is required.
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `separation_distance` | `150` | How far (in ingame units) a player must be from every other living player before collision is turned back on |
 
 ## Credits
 
-- [CS2-InfiniteSpawns](https://github.com/Kitof/CS2-InfiniteSpawns) by [Kitof](https://github.com/Kitof) - original infinite-spawn / no-block approach
+- [CS2-InfiniteSpawns](https://github.com/Kitof/CS2-InfiniteSpawns) by [Kitof](https://github.com/Kitof) — original infinite-spawn / no-block approach
 - [CS2-FullTeamLimit](https://github.com/ShookEagle/CS2-FullTeamFix) by [ShookEagle](https://github.com/ShookEagle)
-- [NoBlock](https://github.com/justinnobledev/cs2-spawntools) / [ManifestManah](https://github.com/ManifestManah) - collision-group approach for shared spawns
+- [NoBlock](https://github.com/justinnobledev/cs2-spawntools) / [ManifestManah](https://github.com/ManifestManah) — collision-group approach for shared spawns
 
 ## License
 
